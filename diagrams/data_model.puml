@@ -1,0 +1,86 @@
+@startuml
+!pragma layout smetana
+title Agri Watch - Data Model
+
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam class {
+  BackgroundColor #F7F9FC
+  BorderColor #3F4E5E
+  ArrowColor #3F4E5E
+}
+
+hide methods
+hide stereotypes
+
+class Source {
+  source_id: str
+  name: str
+  url: str
+  region: str
+  source_type: str
+  enabled: bool
+  reliability: float
+}
+
+class Article {
+  id: int
+  source_id: str
+  title: str
+  url: str
+  summary: str
+  content: str
+  published_at: datetime?
+  category: str
+  confidence: float
+  effective_date: date?
+  impact_level: str
+  created_at: datetime
+}
+
+class Chunk {
+  id: int
+  article_id: int
+  chunk_index: int
+  text: str
+  embedding_json: str
+}
+
+class ClassificationResult {
+  category: str
+  confidence: float
+  effective_date: date?
+  impact_level: str
+  reasons: tuple[str]
+}
+
+class SearchResult {
+  article_id: int
+  title: str
+  url: str
+  category: str
+  source_id: str
+  chunk_index: int
+  text: str
+  score: float
+}
+
+Source "1" ..> "0..*" Article : logical source_id reference
+Article "1" *-- "0..*" Chunk : contains
+ClassificationResult ..> Article : populates metadata
+Chunk ..> SearchResult : converted to ranked result
+
+note right of Article
+The URL is unique.
+Repeated ingestion updates the existing
+article instead of inserting a duplicate.
+end note
+
+note right of Source
+Source definitions are configuration data.
+They are not currently stored as a
+foreign-key table in SQLite.
+end note
+
+@enduml

@@ -1,0 +1,45 @@
+@startuml
+title Agri Watch - System Context
+
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam rectangle {
+  BackgroundColor #F7F9FC
+  BorderColor #3F4E5E
+}
+skinparam actor {
+  BorderColor #3F4E5E
+  BackgroundColor #EAF2F8
+}
+
+left to right direction
+
+actor Farmer
+actor "Agricultural adviser" as Adviser
+actor "System administrator" as Admin
+
+rectangle "Agri Watch\nAgriculture AI Helper" as System
+
+rectangle "European Commission\nRSS and Atom feeds" as EU
+rectangle "UK government\nfeeds" as UK
+rectangle "USDA and other\nofficial feeds" as USDA
+
+Farmer --> System : Ask agriculture questions
+Adviser --> System : Search policy, funding,\ndeadlines and changes
+Admin --> System : Start ingestion\nand rebuild index
+
+System --> Farmer : Answer, matching articles\nand source links
+System --> Adviser : Grounded summary,\ncategories and dates
+
+System --> EU : Fetch published updates
+System --> UK : Fetch published updates
+System --> USDA : Fetch published updates
+
+note bottom of System
+The tool helps users discover and summarize
+agriculture information. It does not replace
+official legal or professional advice.
+end note
+
+@enduml

@@ -1,0 +1,11 @@
+setup.py
+agri_watch.egg-info/PKG-INFO
+agri_watch.egg-info/SOURCES.txt
+agri_watch.egg-info/dependency_links.txt
+agri_watch.egg-info/requires.txt
+agri_watch.egg-info/top_level.txt
+tests/__init__.py
+tests/test_classifier.py
+tests/test_rag.py
+tests/test_scraper_rss.py
+tests/test_sources.py

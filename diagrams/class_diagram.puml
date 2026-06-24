@@ -1,0 +1,310 @@
+@startuml
+!theme plain
+title Agri Watch - Main Class Diagram
+
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+hide empty members
+
+package "API" #EAF2F8 {
+    class Routes <<FastAPI controller>> {
+        +health(): dict
+        +list_sources(): list<dict>
+        +ingest(payload: IngestRequest): dict
+        +list_articles(category, source_id, search, limit): list<dict>
+        +get_article(article_id: int): dict
+        +classify(payload: ClassifyRequest): dict
+        +rebuild_rag(): dict
+        +ask(payload: AskRequest): dict
+    }
+
+    class IngestRequest <<Pydantic model>> {
+        +source_ids: list<str>?
+        +limit_per_source: int
+        +rebuild_rag: bool
+    }
+
+    class AskRequest <<Pydantic model>> {
+        +query: str
+        +top_k: int
+    }
+
+    class ClassifyRequest <<Pydantic model>> {
+        +title: str
+        +summary: str
+        +content: str
+    }
+
+    class ArticleResponse <<Pydantic model>>
+}
+
+package "Ingestion" #E8F8F5 {
+    class IngestionPipeline {
+        -store: SQLiteStore
+        +run(source_ids, limit_per_source, rebuild_rag): IngestionReport
+        +run_for_sources(sources, limit_per_source): IngestionReport
+        +save_feed_item(item: FeedItem): int
+    }
+
+    class IngestionReport <<dataclass>> {
+        +scraped: int
+        +saved: int
+        +indexed_articles: int
+        +indexed_chunks: int
+        +errors: dict<str, str>
+        +to_dict(): dict
+    }
+}
+
+package "Sources and Scraping" #FCF3CF {
+    class SourceRegistry <<utility>> {
+        +get_sources(source_ids): list<Source>
+        +get_source(source_id): Source?
+    }
+
+    class Source <<dataclass>> {
+        +id: str
+        +name: str
+        +url: str
+        +region: str
+        +kind: SourceKind
+        +reliability: str
+        +enabled: bool
+        +timeout_seconds: int
+        +headers: dict<str, str>
+    }
+
+    enum SourceKind {
+        RSS
+        HTML
+        API
+    }
+
+    class RSSScraper {
+        -fetcher
+        +scrape(source: Source): ScrapeResult
+        +parse(payload, source): list<ScrapedArticle>
+        -parse_rss(root, source)
+        -parse_atom(root, source)
+        -is_atom(root): bool
+    }
+
+    class FeedItem <<data object>> {
+        +source_id: str
+        +title: str
+        +url: str
+        +summary: str
+        +published_at: datetime?
+    }
+
+    class ScrapedArticle <<data object>> {
+        +id: str
+        +source_id: str
+        +title: str
+        +url: str
+        +published_at: datetime?
+        +author: str?
+        +summary: str?
+        +content: str?
+        +raw: dict
+    }
+
+    class ScrapeResult <<data object>> {
+        +source_id: str
+        +status
+        +articles: list<ScrapedArticle>
+        +error: str?
+    }
+}
+
+package "Classification" #FDF2E9 {
+    class ClassificationService <<utility>> {
+        +classify_text(title, summary, content): ClassificationResult
+        -extract_dates(text)
+        -calculate_impact(text)
+    }
+
+    class ClassificationResult <<dataclass>> {
+        +category: str
+        +confidence: float
+        +effective_date: date?
+        +impact_level: str
+        +reasons: tuple<str>
+    }
+}
+
+package "Persistence" #F4ECF7 {
+    class SQLiteStore {
+        -db_path: Path
+        +connect(): Connection
+        +init_schema(): void
+        +upsert_article(article: Article): int
+        +get_article(article_id: int): Article?
+        +list_articles(category, source_id, search, limit): list<Article>
+        +replace_chunks(article_id, chunks): void
+        +list_chunks(): list<Row>
+    }
+
+    class Article <<dataclass>> {
+        +id: int?
+        +source_id: str
+        +title: str
+        +url: str
+        +summary: str
+        +content: str
+        +published_at: datetime?
+        +category: str
+        +confidence: float
+        +effective_date: date?
+        +impact_level: str
+        +created_at: datetime
+        +searchable_text: str
+        +to_dict(): dict
+    }
+
+    class ArticleChunk <<database record>> {
+        +article_id: int
+        +chunk_index: int
+        +text: str
+        +embedding_json: str
+    }
+}
+
+package "RAG" #EBDEF0 {
+    class LocalRAG {
+        -store: SQLiteStore
+        -embedder: HashingEmbedder
+        -llm: LLMClient
+        +rebuild_index(): dict<str, int>
+        +search(query, top_k, categories): list<SearchResult>
+        +answer(query, top_k): dict
+    }
+
+    class SearchResult <<dataclass>> {
+        +article_id: int
+        +title: str
+        +url: str
+        +category: str
+        +source_id: str
+        +chunk_index: int
+        +text: str
+        +score: float
+        +to_dict(): dict
+    }
+
+    class Chunker <<utility>> {
+        +chunk_text(text, chunk_size, overlap): list<str>
+    }
+
+    class HashingEmbedder {
+        +dimensions: int
+        +embed(text: str): list<float>
+    }
+
+    class Similarity <<utility>> {
+        +cosine_similarity(a, b): float
+    }
+}
+
+package "Local LLM" #FDEDEC {
+    class LLMClient {
+        -model
+        -model_lock
+        +answer_from_context(question, context): str
+        -get_model()
+        -extract_answer(response): str
+    }
+
+    class PromptBuilder {
+        +build(question, context): str
+        +build_messages(question, context): list<dict>
+    }
+
+    class LlamaModel <<llama.cpp>> {
+        +create_chat_completion(messages, temperature, max_tokens)
+    }
+}
+
+package "Configuration" #E5E7E9 {
+    class Settings <<dataclass>> {
+        +app_name: str
+        +environment: str
+        +data_dir: Path
+        +database_path: Path
+        +rss_timeout_seconds: int
+        +rag_top_k: int
+        +llm_model_path: Path
+        +llm_context_size: int
+        +llm_max_tokens: int
+        +llm_temperature: float
+        +llm_gpu_layers: int
+        +ensure_dirs(): void
+    }
+}
+
+Routes ..> IngestRequest
+Routes ..> AskRequest
+Routes ..> ClassifyRequest
+Routes ..> ArticleResponse
+Routes ..> IngestionPipeline
+Routes ..> SQLiteStore
+Routes ..> LocalRAG
+Routes ..> ClassificationService
+Routes ..> SourceRegistry
+
+IngestionPipeline *-- SQLiteStore
+IngestionPipeline ..> SourceRegistry
+IngestionPipeline ..> RSSScraper
+IngestionPipeline ..> ClassificationService
+IngestionPipeline ..> LocalRAG
+IngestionPipeline --> IngestionReport
+IngestionPipeline ..> FeedItem
+
+SourceRegistry o-- "0..*" Source
+Source --> SourceKind
+RSSScraper ..> Source
+RSSScraper --> ScrapeResult
+ScrapeResult o-- "0..*" ScrapedArticle
+FeedItem ..> ScrapedArticle : normalized from
+
+ClassificationService --> ClassificationResult
+
+SQLiteStore o-- "0..*" Article
+Article "1" *-- "0..*" ArticleChunk
+SQLiteStore o-- "0..*" ArticleChunk
+
+LocalRAG *-- SQLiteStore
+LocalRAG *-- HashingEmbedder
+LocalRAG *-- LLMClient
+LocalRAG ..> Chunker
+LocalRAG ..> Similarity
+LocalRAG --> "0..*" SearchResult
+SearchResult ..> Article
+
+LLMClient *-- PromptBuilder
+LLMClient ..> LlamaModel
+
+Routes ..> Settings
+IngestionPipeline ..> Settings
+LocalRAG ..> Settings
+LLMClient ..> Settings
+
+note right of RSSScraper
+Supports both RSS <item>
+and Atom <entry> feeds.
+end note
+
+note right of LocalRAG
+Retrieves the highest-scoring chunks,
+returns source metadata, and sends the
+retrieved context to the answer generator.
+end note
+
+note bottom of Settings
+The LLM fields represent the local
+llama.cpp configuration used by the
+intended native M1 deployment.
+end note
+
+@enduml

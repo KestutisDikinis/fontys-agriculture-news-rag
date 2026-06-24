@@ -1,0 +1,138 @@
+sources:
+  - id: eu_agri_newsroom_news
+    name: European Commission Agriculture Newsroom - News
+    kind: rss
+    url: https://ec.europa.eu/newsroom/agri/feed?item_type_id=994&lang=en&orderby=item_date
+    homepage: https://agriculture.ec.europa.eu/media_en
+    jurisdiction: EU
+    country: EU
+    language: en
+    category: official_news
+    reliability: official
+    tags:
+      - eu
+      - cap
+      - agriculture
+      - rural-development
+      - policy
+    fetch_interval_minutes: 360
+    notes: Official EU agriculture newsroom feed. Good for policy, CAP, market, and rural-development announcements.
+
+  - id: eu_cap_network_news
+    name: EU CAP Network - News
+    kind: html
+    url: https://eu-cap-network.ec.europa.eu/news_en
+    homepage: https://eu-cap-network.ec.europa.eu/index_en
+    jurisdiction: EU
+    country: EU
+    language: en
+    category: official_news
+    reliability: official
+    tags:
+      - eu
+      - cap
+      - rural-development
+      - implementation
+      - innovation
+    fetch_interval_minutes: 720
+    notes: Useful for CAP implementation, evaluation, EIP-AGRI, and rural development updates.
+
+  - id: rvo_landbouw
+    name: RVO - Landbouw
+    kind: html
+    url: https://www.rvo.nl/landbouw
+    homepage: https://www.rvo.nl
+    jurisdiction: NL
+    country: NL
+    language: nl
+    category: subsidy
+    reliability: official
+    tags:
+      - netherlands
+      - rvo
+      - glb
+      - subsidies
+      - manure
+      - animals
+      - parcels
+    fetch_interval_minutes: 720
+    notes: Main Dutch agriculture portal for manure, GLB/CAP, parcels, animals, rules, subsidies, and farmer obligations.
+
+  - id: rvo_persberichten
+    name: RVO - Persberichten
+    kind: html
+    url: https://www.rvo.nl/onderwerpen/over-ons/pers/persberichten
+    homepage: https://www.rvo.nl
+    jurisdiction: NL
+    country: NL
+    language: nl
+    category: official_news
+    reliability: official
+    tags:
+      - netherlands
+      - rvo
+      - press-release
+      - subsidies
+      - policy
+    fetch_interval_minutes: 360
+    notes: Official RVO press releases. Later we can replace this with a configured press-service RSS endpoint if needed.
+
+  - id: nvwa_news_en
+    name: NVWA English - News
+    kind: html
+    url: https://english.nvwa.nl/latest/news
+    homepage: https://english.nvwa.nl
+    jurisdiction: NL
+    country: NL
+    language: en
+    category: official_news
+    reliability: official
+    tags:
+      - netherlands
+      - nvwa
+      - food-safety
+      - animal-welfare
+      - plant-health
+      - nature
+    fetch_interval_minutes: 360
+    notes: Official food safety, animal welfare, plant health, and nature enforcement news from NVWA.
+
+  - id: government_nl_livestock
+    name: Government.nl - Livestock farming
+    kind: html
+    url: https://www.government.nl/themes/economy/livestock-farming
+    homepage: https://www.government.nl
+    jurisdiction: NL
+    country: NL
+    language: en
+    category: law
+    reliability: official
+    tags:
+      - netherlands
+      - livestock
+      - animal-welfare
+      - regulation
+    fetch_interval_minutes: 1440
+    notes: Stable policy page for Dutch livestock regulation. Low frequency because pages change less often than news feeds.
+
+  - id: boerderij_latest_news
+    name: Boerderij - Latest agriculture news
+    kind: rss
+    url: https://www.boerderij.nl/feed
+    homepage: https://www.boerderij.nl
+    jurisdiction: NL
+    country: NL
+    language: nl
+    category: farming_news
+    reliability: high
+    tags:
+      - netherlands
+      - agriculture-news
+      - dairy
+      - arable
+      - pigs
+      - poultry
+      - machinery
+      - market
+    fetch_interval_minutes: 180
+    notes: Trade news source. Useful for farmer-facing context, but not an official legal source.

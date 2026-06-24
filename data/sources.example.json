@@ -1,0 +1,18 @@
+[
+  {
+    "id": "eu_agriculture_news",
+    "name": "European Commission Agriculture News",
+    "url": "https://agriculture.ec.europa.eu/news/rss_en",
+    "region": "EU",
+    "kind": "rss",
+    "reliability": "official"
+  },
+  {
+    "id": "uk_defra_news",
+    "name": "UK DEFRA News and Communications",
+    "url": "https://www.gov.uk/search/news-and-communications.atom?organisations%5B%5D=department-for-environment-food-rural-affairs",
+    "region": "UK",
+    "kind": "atom",
+    "reliability": "official"
+  }
+]

@@ -1,0 +1,91 @@
+@startuml
+title Agri Watch - Web Ingestion Sequence
+
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam sequence {
+  ArrowColor #3F4E5E
+  LifeLineBorderColor #3F4E5E
+  ParticipantBorderColor #3F4E5E
+  ParticipantBackgroundColor #F7F9FC
+}
+
+actor Administrator as Admin
+participant "FastAPI API" as API
+participant "IngestionPipeline" as Pipeline
+participant "Source Registry" as Registry
+participant "RSS/Atom Scraper" as Scraper
+participant "Official Feed" as Feed
+participant "Classifier" as Classifier
+database "SQLiteStore" as Store
+participant "LocalRAG" as RAG
+participant "Chunker" as Chunker
+participant "HashingEmbedder" as Embedder
+
+Admin -> API : POST /ingest
+activate API
+
+API -> Pipeline : run(source_ids, limit, rebuild_rag)
+activate Pipeline
+
+Pipeline -> Registry : get_sources(source_ids)
+Registry --> Pipeline : enabled source definitions
+
+loop For each configured source
+  Pipeline -> Scraper : scrape source
+  activate Scraper
+
+  Scraper -> Feed : HTTP GET feed URL
+  alt Feed request succeeds
+    Feed --> Scraper : RSS or Atom XML
+    Scraper -> Scraper : Detect feed type\nParse and normalize entries
+    Scraper --> Pipeline : FeedItem list
+  else Feed request fails
+    Feed --> Scraper : Timeout or HTTP error
+    Scraper --> Pipeline : Source error
+  end
+
+  deactivate Scraper
+end
+
+loop For each scraped item within limit
+  Pipeline -> Classifier : classify_text(title, summary)
+  Classifier --> Pipeline : category, confidence,\neffective date, impact
+
+  Pipeline -> Store : upsert_article(article)
+  Store --> Pipeline : article_id
+end
+
+alt rebuild_rag is true
+  Pipeline -> RAG : rebuild_index()
+  activate RAG
+
+  RAG -> Store : list_articles()
+  Store --> RAG : stored articles
+
+  loop For each article
+    RAG -> Chunker : chunk_text(searchable_text)
+    Chunker --> RAG : text chunks
+
+    loop For each chunk
+      RAG -> Embedder : embed(chunk)
+      Embedder --> RAG : vector
+    end
+
+    RAG -> Store : replace_chunks(article_id, chunks)
+  end
+
+  RAG --> Pipeline : article and chunk counts
+  deactivate RAG
+else rebuild_rag is false
+  Pipeline -> Pipeline : Keep existing index
+end
+
+Pipeline --> API : IngestionReport\nscraped, saved, indexed, errors
+deactivate Pipeline
+
+API --> Admin : JSON response
+deactivate API
+
+@enduml

@@ -1,0 +1,156 @@
+@startuml
+!theme plain
+title Agri Watch - Web Ingestion and RAG Question Flow
+
+skinparam shadowing false
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+skinparam ParticipantPadding 18
+skinparam BoxPadding 10
+
+actor "Administrator / Scheduler" as Admin
+actor "Farmer / Adviser" as User
+
+box "FastAPI Application" #EAF2F8
+participant "API Routes" as API
+end box
+
+box "Web Ingestion" #E8F8F5
+participant "IngestionPipeline" as Pipeline
+participant "Source Registry" as Registry
+participant "RSSScraper" as Scraper
+participant "Classification Service" as Classifier
+end box
+
+box "External Sources" #FCF3CF
+participant "Official RSS / Atom Feeds" as Feeds
+end box
+
+box "Storage and Retrieval" #F4ECF7
+database "SQLiteStore" as Store
+participant "LocalRAG" as RAG
+participant "Chunker" as Chunker
+participant "HashingEmbedder" as Embedder
+end box
+
+box "Local Answer Generation" #FDEDEC
+participant "PromptBuilder" as Prompt
+participant "LLMClient" as LLMClient
+participant "Local GGUF Llama Model" as Llama
+end box
+
+== Article ingestion ==
+
+Admin -> API: POST /ingest\nsource_ids, limit_per_source, rebuild_rag
+activate API
+API -> Pipeline: run(...)
+activate Pipeline
+
+Pipeline -> Registry: get_sources(source_ids)
+Registry --> Pipeline: enabled Source objects
+
+loop For each configured source
+    Pipeline -> Scraper: scrape(source)
+    activate Scraper
+    Scraper -> Feeds: HTTP GET source.url
+
+    alt Feed request succeeds
+        Feeds --> Scraper: RSS or Atom XML
+        Scraper -> Scraper: detect feed type
+        Scraper -> Scraper: parse and normalize entries
+        Scraper --> Pipeline: FeedItem[] / ScrapedArticle[]
+    else Timeout, HTTP error, or invalid XML
+        Feeds --> Scraper: error response
+        Scraper --> Pipeline: source error
+        note right of Pipeline
+          The error is recorded.
+          Other sources continue.
+        end note
+    end
+    deactivate Scraper
+end
+
+loop For each scraped article within source limit
+    Pipeline -> Classifier: classify_text(title, summary, content)
+    Classifier --> Pipeline: category, confidence, effective date, impact
+    Pipeline -> Store: upsert_article(Article)
+    Store --> Pipeline: article_id
+end
+
+opt rebuild_rag = true
+    Pipeline -> RAG: rebuild_index()
+    activate RAG
+    RAG -> Store: list_articles(limit=10000)
+    Store --> RAG: stored articles
+
+    loop For each stored article
+        RAG -> Chunker: chunk_text(article.searchable_text)
+        Chunker --> RAG: overlapping chunks
+
+        loop For each chunk
+            RAG -> Embedder: embed(chunk)
+            Embedder --> RAG: normalized vector
+        end
+
+        RAG -> Store: replace_chunks(article_id, chunks + vectors)
+        Store --> RAG: chunks saved
+    end
+
+    RAG --> Pipeline: indexed article and chunk counts
+    deactivate RAG
+end
+
+Pipeline --> API: IngestionReport\nscraped, saved, indexed, errors
+deactivate Pipeline
+API --> Admin: JSON ingestion result
+deactivate API
+
+== User asks a question ==
+
+User -> API: POST /rag/ask\nquery, top_k
+activate API
+API -> RAG: answer(query, top_k)
+activate RAG
+
+RAG -> RAG: infer category filters from query
+RAG -> Embedder: embed(query)
+Embedder --> RAG: query vector
+
+RAG -> Store: list_chunks()
+Store --> RAG: chunk text, article metadata, vectors
+
+loop For each candidate chunk
+    RAG -> RAG: apply category filter
+    RAG -> RAG: calculate cosine similarity
+end
+
+RAG -> RAG: sort by score and select top_k
+
+alt No relevant matches
+    RAG --> API: insufficient-information answer\nempty matches and sources
+else Matches found
+    RAG -> Prompt: build(question, retrieved context)
+    Prompt --> RAG: grounded prompt / messages
+    RAG -> LLMClient: answer_from_context(question, context)
+    activate LLMClient
+    LLMClient -> Llama: generate answer locally
+    activate Llama
+    Llama --> LLMClient: generated response
+    deactivate Llama
+    LLMClient --> RAG: final answer
+    deactivate LLMClient
+
+    RAG -> RAG: create unique source list
+    RAG --> API: answer + matches + source URLs
+end
+
+deactivate RAG
+API --> User: JSON response
+deactivate API
+
+note over User,Llama
+The answer is grounded in the retrieved agriculture articles.
+The original source URLs are returned for verification.
+end note
+
+@enduml

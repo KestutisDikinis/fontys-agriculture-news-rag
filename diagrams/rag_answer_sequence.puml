@@ -1,0 +1,71 @@
+@startuml
+title Agri Watch - RAG Question Answering Sequence
+
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam sequence {
+  ArrowColor #3F4E5E
+  LifeLineBorderColor #3F4E5E
+  ParticipantBorderColor #3F4E5E
+  ParticipantBackgroundColor #F7F9FC
+}
+
+actor User
+participant "FastAPI API" as API
+participant "LocalRAG" as RAG
+participant "HashingEmbedder" as Embedder
+database "SQLiteStore" as Store
+participant "Similarity Search" as Search
+participant "PromptBuilder" as Prompt
+participant "LLMClient" as Client
+participant "Local Llama Model" as LLM
+
+User -> API : POST /rag/ask\nquery and top_k
+activate API
+
+API -> RAG : answer(query, top_k)
+activate RAG
+
+RAG -> RAG : Infer optional category filters
+RAG -> Embedder : embed(query)
+Embedder --> RAG : query vector
+
+RAG -> Store : list_chunks()
+Store --> RAG : chunks, article metadata,\nand stored vectors
+
+RAG -> Search : cosine similarity\nand category filtering
+Search --> RAG : ranked top-k matches
+
+alt No relevant matches
+  RAG --> API : No-information answer\nempty matches and sources
+else Relevant matches found
+  RAG -> Prompt : Build context from matches
+  Prompt --> RAG : grounded messages or prompt
+
+  RAG -> Client : answer_from_context(query, context)
+  activate Client
+
+  Client -> LLM : create_chat_completion()
+  activate LLM
+  LLM --> Client : generated answer
+  deactivate LLM
+
+  Client --> RAG : answer text
+  deactivate Client
+
+  RAG -> RAG : Build unique source list
+  RAG --> API : answer, matches and sources
+end
+
+deactivate RAG
+API --> User : JSON response
+deactivate API
+
+note over RAG,LLM
+This diagram assumes the corrected flow:
+category filters affect retrieval, but do not
+bypass local LLM generation when matches exist.
+end note
+
+@enduml

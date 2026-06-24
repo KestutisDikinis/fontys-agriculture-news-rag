@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Agri Watch</title>
+  <style>
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; background: #f6f7f2; color: #17210f; }
+    header { padding: 28px 40px; background: #17210f; color: white; }
+    main { max-width: 1100px; margin: 0 auto; padding: 28px; }
+    section { background: white; border: 1px solid #dfe5d7; border-radius: 14px; padding: 22px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
+    button { border: 0; border-radius: 10px; padding: 10px 14px; background: #2e6b31; color: white; cursor: pointer; font-weight: 650; }
+    button.secondary { background: #38546b; }
+    input, textarea, select { width: 100%; box-sizing: border-box; border: 1px solid #cbd5c0; border-radius: 10px; padding: 10px; font: inherit; }
+    textarea { min-height: 90px; }
+    .row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: end; }
+    .article { padding: 14px 0; border-top: 1px solid #edf0e9; }
+    .article h3 { margin: 0 0 5px; }
+    .badge { display: inline-block; border-radius: 999px; padding: 3px 8px; background: #eef5ea; border: 1px solid #cddfbe; font-size: 12px; margin-right: 6px; }
+    .muted { color: #60705b; }
+    pre { white-space: pre-wrap; background: #f4f6f0; border-radius: 10px; padding: 14px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Agri Watch</h1>
+    <p>Scrape agriculture news, classify policy changes, and ask questions over the indexed source text.</p>
+  </header>
+  <main>
+    <section>
+      <h2>Ingest sources</h2>
+      <p class="muted">This will scrape the configured feeds, store articles, classify them, and rebuild the local RAG index.</p>
+      <button id="ingest">Run ingestion</button>
+      <pre id="ingest-output"></pre>
+    </section>
+
+    <section>
+      <h2>Ask the RAG</h2>
+      <div class="row">
+        <textarea id="question" placeholder="What agriculture laws or compliance changes are coming this month?"></textarea>
+        <button class="secondary" id="ask">Ask</button>
+      </div>
+      <pre id="answer-output"></pre>
+    </section>
+
+    <section>
+      <h2>Articles</h2>
+      <div class="row">
+        <select id="category">
+          <option value="">All categories</option>
+          <option value="rumor">Rumors / proposals</option>
+          <option value="upcoming_this_month">Upcoming this month</option>
+          <option value="upcoming_within_year">Upcoming within one year</option>
+          <option value="current_or_recent">Current or recent law/policy</option>
+          <option value="background_news">Background news</option>
+        </select>
+        <button id="refresh">Refresh</button>
+      </div>
+      <div id="articles"></div>
+    </section>
+  </main>
+
+<script>
+async function api(path, options = {}) {
+  const res = await fetch(path, {
+    headers: { "Content-Type": "application/json" },
+    ...options
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return await res.json();
+}
+
+function pretty(value) {
+  return JSON.stringify(value, null, 2);
+}
+
+async function loadArticles() {
+  const category = document.getElementById("category").value;
+  const query = category ? `?category=${encodeURIComponent(category)}` : "";
+  const articles = await api(`/api/articles${query}`);
+  const target = document.getElementById("articles");
+  target.innerHTML = articles.map(a => `
+    <article class="article">
+      <h3><a href="${a.url}" target="_blank" rel="noreferrer">${a.title}</a></h3>
+      <div>
+        <span class="badge">${a.category}</span>
+        <span class="badge">impact: ${a.impact_level}</span>
+        ${a.effective_date ? `<span class="badge">effective: ${a.effective_date}</span>` : ""}
+      </div>
+      <p>${a.summary || "No summary available."}</p>
+      <p class="muted">${a.source_id}</p>
+    </article>
+  `).join("") || "<p>No articles yet. Run ingestion first.</p>";
+}
+
+document.getElementById("ingest").addEventListener("click", async () => {
+  const output = document.getElementById("ingest-output");
+  output.textContent = "Running...";
+  try {
+    const result = await api("/api/ingest", { method: "POST", body: pretty({ limit_per_source: 20 }) });
+    output.textContent = pretty(result);
+    await loadArticles();
+  } catch (err) {
+    output.textContent = String(err);
+  }
+});
+
+document.getElementById("ask").addEventListener("click", async () => {
+  const output = document.getElementById("answer-output");
+  output.textContent = "Thinking...";
+  try {
+    const query = document.getElementById("question").value;
+    const result = await api("/api/rag/ask", { method: "POST", body: pretty({ query, top_k: 5 }) });
+    output.textContent = pretty(result);
+  } catch (err) {
+    output.textContent = String(err);
+  }
+});
+
+document.getElementById("refresh").addEventListener("click", loadArticles);
+document.getElementById("category").addEventListener("change", loadArticles);
+loadArticles().catch(err => document.getElementById("articles").textContent = String(err));
+</script>
+</body>
+</html>

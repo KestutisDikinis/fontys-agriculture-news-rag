@@ -1,0 +1,81 @@
+@startuml
+title Agri Watch - Component Architecture
+
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam componentStyle rectangle
+skinparam package {
+  BackgroundColor #F7F9FC
+  BorderColor #3F4E5E
+}
+skinparam component {
+  BackgroundColor #FFFFFF
+  BorderColor #3F4E5E
+}
+skinparam database {
+  BackgroundColor #FFF8E7
+  BorderColor #8A6D3B
+}
+
+left to right direction
+
+actor User
+cloud "Official RSS and Atom feeds" as Feeds
+
+package "FastAPI application" {
+  component "API routes" as API
+  component "Request schemas" as Schemas
+}
+
+package "Web ingestion" {
+  component "Source registry" as Registry
+  component "IngestionPipeline" as Pipeline
+  component "RSS and Atom scraper" as Scraper
+  component "Article classifier" as Classifier
+}
+
+package "RAG pipeline" {
+  component "LocalRAG" as RAG
+  component "Text chunker" as Chunker
+  component "HashingEmbedder" as Embedder
+  component "Cosine similarity search" as Search
+  component "PromptBuilder" as Prompt
+  component "LLMClient" as LLMClient
+}
+
+database "SQLite\narticles and chunks" as DB
+artifact "Llama 3.2 3B\nGGUF model" as Model
+component "llama-cpp-python" as LlamaCpp
+
+User --> API : HTTP requests
+API --> Schemas : Validate payloads
+
+API --> Pipeline : POST /ingest
+Pipeline --> Registry : Get enabled sources
+Pipeline --> Scraper : Scrape sources
+Scraper --> Feeds : HTTP GET
+Pipeline --> Classifier : Classify article
+Pipeline --> DB : Upsert article
+Pipeline --> RAG : Rebuild index
+
+API --> RAG : POST /rag/ask
+API --> DB : Read articles
+
+RAG --> DB : Read articles and chunks
+RAG --> Chunker : Split article text
+RAG --> Embedder : Embed chunks and query
+RAG --> Search : Rank by similarity
+RAG --> Prompt : Build grounded prompt
+RAG --> LLMClient : Generate answer
+
+LLMClient --> LlamaCpp
+LlamaCpp --> Model : Load and run locally
+
+note bottom of Embedder
+Current implementation uses a deterministic
+hashing embedder. A semantic embedding model
+is a future improvement.
+end note
+
+@enduml
